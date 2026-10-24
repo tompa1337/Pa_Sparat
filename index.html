@@ -24,6 +24,9 @@
   --t0:#ff8d5e;
   --t1:#5ed6a9;
   --t2:#71b4ff;
+  --t3:#c9a6ff;
+  --t4:#ff6fa3;
+  --t5:#b5e35a;
   --display:'Big Shoulders Display','Arial Narrow',Impact,sans-serif;
   --body:'Atkinson Hyperlegible',system-ui,-apple-system,'Segoe UI',sans-serif;
   color-scheme:dark;
@@ -98,7 +101,7 @@ h2{font-size:1.8em;font-weight:800}
 .btn.signal{background:var(--signal);color:#1d0c07;border-color:var(--signal)}
 .btn.ghost{background:none;color:var(--muted)}
 .btn.small{padding:.35em .7em;font-size:.85em}
-.teams{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.7em}
+.teams{display:grid;grid-template-columns:repeat(var(--cols,3),minmax(0,1fr));gap:.7em}
 @media (max-width:700px){.teams{grid-template-columns:minmax(0,1fr)}}
 .tcard{background:var(--carriage);border-radius:12px;padding:.9em;border-top:5px solid var(--c);display:flex;flex-direction:column;gap:.6em}
 .tcard .nm{font-weight:700}
@@ -136,6 +139,10 @@ code.tok{font-family:var(--body);font-weight:700;color:var(--lamp);background:va
 .phones div{display:flex;justify-content:space-between;gap:.6em}
 .on-dot{color:var(--ok)}
 .off-dot{color:var(--muted)}
+.nteams{display:flex;flex-wrap:wrap;align-items:center;gap:.4em}
+.nteams .muted{margin-right:.4em;font-size:.9em}
+.nteams button{min-width:2.4em;padding:.35em .6em;border-radius:8px;border:1px solid var(--rail);font-weight:700}
+.nteams button.sel{background:var(--lamp);border-color:var(--lamp);color:#1b1608}
 .qrs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.6em}
 .qr{display:flex;flex-direction:column;align-items:center;gap:.3em;font-size:.82em;text-align:center;min-width:0}
 .qrbox{background:#fff;border-radius:8px;padding:4px;width:100%;max-width:170px;border:3px solid var(--c)}
@@ -3255,7 +3262,7 @@ let peer = null, peerTried = false, peerUp = false, peerErr = '';
 const conns = new Set();    // programledaren: anslutna telefoner
 let phoneConn = null;       // telefonen: kopplingen till programledaren
 let hostLive = null;
-let phoneCount = [0,0,0];
+let phoneCount = [0,0,0,0,0,0];
 let pendingPull = null;
 let pendingPin = null;
 let pendingAnswer = null, myAnswerText = '', editingAnswer = false, ansSegKey = null;
@@ -3264,7 +3271,7 @@ let brakeArmed = false, brakeTimer = null;
 const params = new URLSearchParams(location.search);
 const joinCode = (params.get('spel') || '').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,8);
 const lagParam = parseInt(params.get('lag'), 10);
-if (joinCode) { if (lagParam >= 1 && lagParam <= 3) { mode = 'phone'; myTeam = lagParam - 1; } else mode = 'picker'; }
+if (joinCode) { if (lagParam >= 1 && lagParam <= 6) { mode = 'phone'; myTeam = lagParam - 1; } else mode = 'picker'; }
 function hostId(code){ return 'kalas-pa-sparet-' + String(code).toLowerCase(); }
 function baseUrl(){ return location.href.split('#')[0].split('?')[0]; }
 function joinUrl(i){ return baseUrl() + '?spel=' + S.code + '&lag=' + (i+1); }
@@ -3286,6 +3293,18 @@ function lev(a,b){ const m = a.length, n = b.length; const d = Array.from({lengt
 function isMatch(text, seg){
   const g = norm(text); if (!g) return false;
   return [seg.answer, ...(seg.alt||[])].some(x => { const c = norm(x); return g === c || (c.length > 4 && lev(g,c) <= 2) || (g.length >= 4 && g.includes(c)); });
+}
+function teamCols(){ const n = S.teams.length; return n === 4 ? 4 : n <= 3 ? n : 3; }
+function setTeamCount(n){
+  n = Math.max(2, Math.min(MAX_TEAMS, n|0));
+  while (S.teams.length < n) S.teams.push({ name:'Lag ' + (S.teams.length + 1), adj:0 });
+  if (S.teams.length > n) {
+    S.teams.length = n;
+    const drop = o => { if (o) for (const k of Object.keys(o)) if (+k >= n) delete o[k]; };
+    for (const r of Object.values(S.resa)) { drop(r.stops); drop(r.judged); drop(r.answers); for (const f of Object.values(r.fa||{})) drop(f); }
+    for (const r of Object.values(S.runda)) for (const q of Object.values(r.aw||{})) for (const pp of Object.values(q)) drop(pp);
+    for (const st of Object.values(S.skiss||{})) for (const rr of Object.values(st.rounds||{})) drop(rr.pins);
+  }
 }
 function Q(id){ return S.runda[id] ||= { shown:{}, aw:{} }; }
 
@@ -3347,6 +3366,7 @@ function viewHome(){
     <aside style="display:flex;flex-direction:column;gap:1em">
       <div class="panel">
         <h3>Lagen</h3>
+        <div class="nteams" role="group" aria-label="Antal lag"><span class="muted">Antal lag</span>${[2,3,4,5,6].map(n => `<button class="${S.teams.length === n ? 'sel' : ''}" data-act="nteams" data-n="${n}" aria-pressed="${S.teams.length === n}">${n}</button>`).join('')}</div>
         ${S.teams.map((t,i) => `<label class="field" style="--c:${col(i)}"><span></span><input id="team-name-${i}" data-name-input="${i}" value="${esc(t.name)}" maxlength="24" aria-label="Namn på lag ${i+1}"></label>`).join('')}
       </div>
       <div class="panel">
@@ -3358,7 +3378,7 @@ function viewHome(){
           <li>Rätt svar ger poängen, fel svar ger noll.</li>
           <li>Efter varje resa kommer två följdfrågor om resmålet, värda 1 poäng var.</li>
         </ol>
-        <p class="hint">Tips: tryck <kbd>→</kbd> eller <kbd>N</kbd> för nästa ledtråd och <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> när ett lag drar i nödbromsen. Poängen sparas i webbläsaren om sidan laddas om.</p>
+        <p class="hint">Tips: tryck <kbd>→</kbd> eller <kbd>N</kbd> för nästa ledtråd och lagets siffra, <kbd>1</kbd>–<kbd>${S.teams.length}</kbd>, när ett lag drar i nödbromsen. Poängen sparas i webbläsaren om sidan laddas om.</p>
       </div>
       <div class="panel">
         <h3>Lagens telefoner</h3>
@@ -3367,7 +3387,7 @@ function viewHome(){
         <div class="qrs">${S.teams.map((t,i) => `<div class="qr" style="--c:${col(i)}"><div class="qrbox">${qrSvg(joinUrl(i))}</div><div class="nm">${esc(t.name)}</div><div class="${phoneCount[i] ? 'on-dot' : 'off-dot'}">${phoneCount[i] ? '● Ansluten' : '○ Väntar'}</div></div>`).join('')}</div>
         <p class="hint" style="margin:0">Spelkod <code class="tok">${S.code}</code> · ${!peerTried ? 'Startar…' : peerUp ? 'Redo för telefoner.' : esc(peerErr || 'Ansluter…')}</p>
         <button class="btn ghost small" data-act="newcode" id="newcode">Ny spelkod</button>`}
-        <p class="hint" style="margin:0">Strular en telefon? Laget slår på en kastrull och du trycker <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>.</p>
+        <p class="hint" style="margin:0">Strular en telefon? Laget slår på en kastrull och du trycker lagets siffra, <kbd>1</kbd>–<kbd>${S.teams.length}</kbd>.</p>
       </div>
       <button class="btn ghost small" data-act="resetall" id="resetall">Nollställ hela spelet</button>
     </aside>
@@ -3399,7 +3419,7 @@ function viewResa(seg){
     <button class="btn signal" data-act="reveal" ${canReveal ? '' : 'disabled'}>Visa svaret</button>
     <button class="btn ghost small" data-act="resetresa" id="resetresa">Börja om resan</button>
   </div>
-  <div class="teams">
+  <div class="teams" style="--cols:${teamCols()}">
     ${S.teams.map((t,i) => {
       const st = r.stops[i];
       let body;
@@ -3466,7 +3486,7 @@ function viewSkiss(seg){
     ${k > 0 ? `<button class="btn ghost small" data-act="skprev">← Förra skissen</button>` : ''}
     <button class="btn ghost small" data-act="skreset" id="skreset">Börja om skissen</button>
   </div>
-  <div class="teams">
+  <div class="teams" style="--cols:${teamCols()}">
     ${S.teams.map((t,i) => {
       const pin = rr.pins[i];
       let body;
@@ -3518,7 +3538,8 @@ function worldMap(el, opts = {}){
   try { L.geoJSON(getWorld(), { interactive:false, style:{ color:'#4a5c8c', weight:0.7, fillColor:'#1f2c47', fillOpacity:1 } }).addTo(map); } catch(e) {}
   return map;
 }
-const TEAM_HEX = ['#ff8d5e','#5ed6a9','#71b4ff'];
+const TEAM_HEX = ['#ff8d5e','#5ed6a9','#71b4ff','#c9a6ff','#ff6fa3','#b5e35a'];
+const MAX_TEAMS = 6;
 let hostSketch = null, hostSketchRR = null, hostMap = null;
 function afterRenderHost(){
   const seg = S.view != null ? PROGRAM[S.view] : null;
@@ -3664,14 +3685,15 @@ function mountPhoneMap(){
 }
 function viewPicker(){
   return `<div class="phone"><div class="seg">Vilket lag är du med i?</div>
-    <div class="pick">${[0,1,2].map(i => `<button style="--c:${col(i)}" data-act="pickteam" data-t="${i}">Lag ${i+1}</button>`).join('')}</div>
+    <div class="pick">${Array.from({ length: hostLive && hostLive.teams ? hostLive.teams.length : MAX_TEAMS }, (_,i) => i).map(i => `<button style="--c:${col(i)}" data-act="pickteam" data-t="${i}">Lag ${i+1}</button>`).join('')}</div>
 </div>`;
 }
 function viewPhone(){
   const t = myTeam, L = hostLive;
   const name = L && L.teams ? L.teams[t] : 'Lag ' + (t+1);
   let inner;
-  if (!peerUp && peerErr) inner = `<div class="msg">${esc(peerErr)}</div><div class="status">Håll sidan öppen, den försöker igen av sig själv.</div>`;
+  if (L && L.teams && myTeam >= L.teams.length) inner = `<div class="msg">Spelet har bara ${L.teams.length} lag just nu.</div><div class="status">Skanna en annan QR-kod på TV:n.</div>`;
+  else if (!peerUp && peerErr) inner = `<div class="msg">${esc(peerErr)}</div><div class="status">Håll sidan öppen, den försöker igen av sig själv.</div>`;
   else if (!peerUp) inner = `<div class="msg">Ansluter till spelet…</div>`;
   else if (!L) inner = `<div class="msg">Väntar på programledaren…</div><div class="status">Programledaren behöver ha spelet öppet på sin dator.</div>`;
   else if (L.type === 'skiss') {
@@ -3708,7 +3730,7 @@ function viewPhone(){
 }
 
 function countPhones(){
-  const counts = [0,0,0];
+  const counts = [0,0,0,0,0,0];
   for (const c of conns) if (c.open && Number.isInteger(c._team)) counts[c._team]++;
   phoneCount = counts;
 }
@@ -3746,7 +3768,7 @@ function startHost(){
     conn.on('data', msg => {
       if (!msg || typeof msg !== 'object') return;
       const team = Number(msg.team);
-      if (!(team >= 0 && team <= 2)) return;
+      if (!(Number.isInteger(team) && team >= 0 && team < S.teams.length)) return;
       conn._team = team;
       if (msg.pull) applyPull(team, msg.pull);
       if (msg.pin) applyPin(team, msg.pin);
@@ -3767,7 +3789,7 @@ function startHost(){
 }
 function newCode(){
   try { if (peer) peer.destroy(); } catch(e) {}
-  conns.clear(); phoneCount = [0,0,0]; peerUp = false; peerErr = '';
+  conns.clear(); phoneCount = [0,0,0,0,0,0]; peerUp = false; peerErr = '';
   S.code = makeCode(); render(); startHost();
 }
 function startPhone(){
@@ -3833,6 +3855,7 @@ document.addEventListener('click', e => {
   if (a === 'newcode') { twoClick(b, 'code', 'Klicka igen: telefonerna måste skanna om', newCode); return; }
   if (a === 'home') { S.view = null; render(); window.scrollTo(0,0); return; }
   if (a === 'go') { S.view = +b.dataset.i; render(); window.scrollTo(0,0); return; }
+  if (a === 'nteams') { setTeamCount(+b.dataset.n); render(); return; }
   if (a === 'adj') { S.teams[t].adj = (S.teams[t].adj||0) + (+b.dataset.d); render(); return; }
   if (a === 'resetall') { twoClick(b, 'all', 'Klicka igen för att nollställa allt', () => { const names = S.teams.map(x => x.name), code = S.code; S = fresh(); S.code = code; S.teams.forEach((x,i) => x.name = names[i]); render(); }); return; }
   if (seg && seg.type === 'resa') {
@@ -3876,9 +3899,9 @@ document.addEventListener('keydown', e => {
   if (seg && seg.type === 'resa' && (e.key === 'ArrowRight' || e.key.toLowerCase() === 'n')) {
     const r = R(seg.id); if (r.shown < 5 && !r.revealed) { r.shown++; render(); }
   }
-  if (seg && seg.type === 'resa' && ['1','2','3'].includes(e.key)) {
+  if (seg && seg.type === 'resa' && /^[1-6]$/.test(e.key)) {
     const t = +e.key - 1, r = R(seg.id);
-    if (r.shown && !r.revealed && r.stops[t] == null) { r.stops[t] = POINTS[r.shown-1]; render(); }
+    if (t < S.teams.length && r.shown && !r.revealed && r.stops[t] == null) { r.stops[t] = POINTS[r.shown-1]; render(); }
   }
 });
 

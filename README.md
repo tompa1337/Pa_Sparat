@@ -1,6 +1,6 @@
 # Kalas på spåret
 
-Frågesport i På spåret-stil för tre lag. Programledaren visar spelet på TV:n, och lagen drar i nödbromsen från sina telefoner genom att skanna en QR-kod. Ingen app eller inloggning behövs.
+Frågesport i På spåret-stil för 2–6 lag. Programledaren visar spelet på TV:n, och lagen drar i nödbromsen från sina telefoner genom att skanna en QR-kod. Ingen app eller inloggning behövs.
 
 ## Köra lokalt
 
