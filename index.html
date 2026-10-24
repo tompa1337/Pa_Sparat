@@ -167,7 +167,12 @@ code.tok{font-family:var(--body);font-weight:700;color:var(--lamp);background:va
 .mk.ok{color:var(--ok)} .mk.bad{color:var(--bad)} .mk.warn{color:var(--lamp)}
 .adm-score{display:flex;flex-wrap:wrap;gap:.4em}
 .adm-score span{background:var(--carriage);border-radius:999px;padding:.2em .7em;border:2px solid var(--c);font-weight:700}
-.qrs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.6em}
+.jgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1em 1.2em;margin-top:1em}
+@media (max-width:820px){.jgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.jtile{display:flex;flex-direction:column;align-items:center;gap:.4em;text-align:center}
+.jtile .qrbox{max-width:min(200px,26vh);border-width:5px}
+.jtile .jn{font-family:var(--display);font-weight:900;font-size:1.6em;text-transform:uppercase;color:var(--c);line-height:1}
+.qrs{display:grid;grid-template-columns:repeat(auto-fill,minmax(105px,1fr));gap:.6em}
 .qr{display:flex;flex-direction:column;align-items:center;gap:.3em;font-size:.82em;text-align:center;min-width:0}
 .qrbox{background:#fff;border-radius:8px;padding:4px;width:100%;max-width:170px;border:3px solid var(--c)}
 .qrbox svg{display:block;width:100%;height:auto}
@@ -3298,8 +3303,13 @@ const lagParam = parseInt(params.get('lag'), 10);
 if (joinCode) { if (lagParam >= 1 && lagParam <= 6) { mode = 'phone'; myTeam = lagParam - 1; } else mode = 'picker'; }
 const adminParam = (params.get('admin') || '').replace(/[^A-Za-z0-9]/g,'').slice(0,16);
 if (joinCode && adminParam) { mode = 'admin'; myTeam = null; }
-let adminData = null, showAdmQr = false;
+let adminData = null, showAdmQr = false, bigQr = false;
 let pendingChoice = null; const myChoices = {};
+let pendingName = null, renaming = false;
+const NAME_KEY = 'kps-namn-' + joinCode;
+function nameDone(){ try { return localStorage.getItem(NAME_KEY + '-' + myTeam) === '1'; } catch(e) { return !!sessionNamed[myTeam]; } }
+const sessionNamed = {};
+function markNamed(){ sessionNamed[myTeam] = true; try { localStorage.setItem(NAME_KEY + '-' + myTeam, '1'); } catch(e) {} }
 function hostId(code){ return 'kalas-pa-sparet-' + String(code).toLowerCase(); }
 function baseUrl(){ return location.href.split('#')[0].split('?')[0]; }
 function joinUrl(i){ return baseUrl() + '?spel=' + S.code + '&lag=' + (i+1); }
@@ -3470,15 +3480,14 @@ function viewHome(){
         <div class="nteams" role="group" aria-label="Antal lag, QR-koder"><span class="muted">En QR-kod per lag</span>${[2,3,4,5,6].map(n => `<button class="${S.teams.length === n ? 'sel' : ''}" data-act="nteams" data-n="${n}" aria-pressed="${S.teams.length === n}">${n}</button>`).join('')}</div>
         ${location.protocol === 'file:' ? `<p style="margin:0;font-size:.92em">Sidan är öppnad som en fil på datorn. Lägg upp den på nätet först, så fungerar QR-koderna.</p>` : `
         <p style="margin:0;font-size:.92em">Varje lag skannar sin QR-kod med mobilkameran. Ingen app eller inloggning behövs.</p>
-        <div class="qrs">${S.teams.map((t,i) => `<div class="qr" style="--c:${col(i)}"><div class="qrbox">${qrSvg(joinUrl(i))}</div><div class="nm">${esc(t.name)}</div><div class="${phoneCount[i] ? 'on-dot' : 'off-dot'}">${phoneCount[i] ? '● Ansluten' : '○ Väntar'}</div></div>`).join('')}</div>
+        <div class="qrs">${S.teams.map((t,i) => `<div class="qr" style="--c:${col(i)}"><div class="qrbox">${qrSvg(joinUrl(i))}</div><div class="nm">${esc(t.name)}</div><div class="${phoneCount[i] ? 'on-dot' : 'off-dot'}">${phoneCount[i] ? '● Ansluten' : '○ Väntar'}</div></div>`).join('')}
+          <div class="qr" style="--c:var(--lamp)"><div class="qrbox">${qrSvg(baseUrl() + '?spel=' + S.code + '&admin=' + S.akey)}</div><div class="nm">Programledare</div><div class="${adminOnline() ? 'on-dot' : 'off-dot'}">${adminOnline() ? '● Ansluten' : 'Bara för dig'}</div></div>
+        </div>
+        <button class="btn primary" data-act="bigqr" id="bigqr">Visa QR-koderna på hela skärmen</button>
+        <p class="hint" style="margin:0">Lagen skannar sin färg och skriver in sitt lagnamn i mobilen. Den gula koden är din: där ser du lagens svar och rätt svar.</p>
         <p class="hint" style="margin:0">Spelkod <code class="tok">${S.code}</code> · ${!peerTried ? 'Startar…' : peerUp ? 'Redo för telefoner.' : esc(peerErr || 'Ansluter…')}</p>
         <button class="btn ghost small" data-act="newcode" id="newcode">Ny spelkod</button>
-        <div style="border-top:1px solid var(--rail);padding-top:.8em;display:flex;flex-direction:column;gap:.6em">
-          <div class="nm" style="font-weight:700">Din telefon som programledare ${conns.size && [...conns].some(c => c.open && c._admin) ? '<span class="on-dot">● Ansluten</span>' : ''}</div>
-          <p class="hint" style="margin:0">Där ser du lagens svar och rätt svar medan ni spelar. Visa inte koden för lagen.</p>
-          ${showAdmQr ? `<div class="qr" style="--c:var(--lamp);align-items:flex-start"><div class="qrbox" style="max-width:200px">${qrSvg(baseUrl() + '?spel=' + S.code + '&admin=' + S.akey)}</div></div>` : ''}
-          <button class="btn small" data-act="admqr" id="admqr">${showAdmQr ? 'Dölj programledar-QR' : 'Visa programledar-QR'}</button>
-        </div>`}
+`}
         <p class="hint" style="margin:0">Strular en telefon? Laget slår på en kastrull och du trycker lagets siffra, <kbd>1</kbd>–<kbd>${S.teams.length}</kbd>.</p>
       </div>
       <button class="btn ghost small" data-act="resetall" id="resetall">Nollställ hela spelet</button>
@@ -3660,6 +3669,18 @@ function afterRenderHost(){
   requestAnimationFrame(loop);
 })();
 
+function viewJoin(){
+  const tile = (url, c, name, status, on) => `<div class="jtile" style="--c:${c}"><div class="qrbox">${qrSvg(url)}</div><div class="jn">${esc(name)}</div><div class="${on ? 'on-dot' : 'off-dot'}">${esc(status)}</div></div>`;
+  return `
+  <button class="back" data-act="bigqr">← Tillbaka</button>
+  <div class="eyebrow">Skanna med mobilkameran</div>
+  <h1>Kliv ombord</h1>
+  <p class="intro">Ett lag per färg. Skanna, skriv in ert lagnamn och vänta på avgång.</p>
+  <div class="jgrid">
+    ${S.teams.map((t,i) => tile(joinUrl(i), col(i), t.name, phoneCount[i] ? '● Ansluten' : '○ Väntar', phoneCount[i])).join('')}
+    ${tile(baseUrl() + '?spel=' + S.code + '&admin=' + S.akey, 'var(--lamp)', 'Programledare', adminOnline() ? '● Ansluten' : 'Bara för dig', adminOnline())}
+  </div>`;
+}
 function viewFinal(){
   const sc = scores();
   const order = S.teams.map((t,i) => ({t,i,s:sc[i]})).sort((a,b) => b.s - a.s);
@@ -3679,7 +3700,7 @@ function renderMain(){
   const seg = S.view != null ? PROGRAM[S.view] : null;
   const m = document.getElementById('main');
   if (hostMap) { try { hostMap.remove(); } catch(e) {} hostMap = null; }
-  m.innerHTML = !seg ? viewHome() : seg.type === 'resa' ? viewResa(seg) : seg.type === 'runda' ? viewRunda(seg) : seg.type === 'skiss' ? viewSkiss(seg) : viewFinal();
+  m.innerHTML = bigQr ? viewJoin() : !seg ? viewHome() : seg.type === 'resa' ? viewResa(seg) : seg.type === 'runda' ? viewRunda(seg) : seg.type === 'skiss' ? viewSkiss(seg) : viewFinal();
   afterRenderHost();
 }
 function liveState(){
@@ -3748,14 +3769,17 @@ function render(){
     const segKey = L2 && L2.type === 'resa' ? `${L2.gid}:${L2.id}:${L2.epoch}` : null;
     if (segKey !== ansSegKey) { ansSegKey = segKey; myAnswerText = ''; editingAnswer = false; pendingAnswer = null; }
     const ansKey = mode === 'phone' && peerUp && L2 && L2.type === 'resa' && !L2.revealed && L2.stops && L2.stops[myTeam] != null && (editingAnswer || !(L2.answered && L2.answered[myTeam])) ? 'ans:' + segKey : null;
-    const key = skKey || ansKey;
-    if (key && key === phoneMapKey && (phoneMap || document.getElementById('ansin'))) return;
+    if (pendingName && L2 && L2.teams && L2.teams[myTeam] === pendingName) pendingName = null;
+    const nameKey = mode === 'phone' && peerUp && L2 && L2.teams && myTeam < L2.teams.length && (renaming || !nameDone()) && !pendingName ? 'name:' + myTeam : null;
+    const key = nameKey || skKey || ansKey;
+    if (key && key === phoneMapKey && (phoneMap || document.getElementById('ansin') || document.getElementById('namein'))) return;
     if (phoneMap) { try { phoneMap.remove(); } catch(e) {} phoneMap = null; phoneMarker = null; }
     if (key !== phoneMapKey) myPin = null;
     phoneMapKey = key;
-    document.getElementById('main').innerHTML = mode === 'picker' ? viewPicker() : mode === 'admin' ? viewAdmin() : skKey ? viewPhoneSkiss(L2) : ansKey ? viewPhoneAnswer(L2) : viewPhone();
-    if (skKey) mountPhoneMap();
-    if (ansKey) { const inp = document.getElementById('ansin'); if (inp) { inp.value = myAnswerText; setTimeout(() => { try { inp.focus(); } catch(e) {} }, 50); } }
+    document.getElementById('main').innerHTML = mode === 'picker' ? viewPicker() : mode === 'admin' ? viewAdmin() : nameKey ? viewPhoneName(L2) : skKey ? viewPhoneSkiss(L2) : ansKey ? viewPhoneAnswer(L2) : viewPhone();
+    if (nameKey) { const inp = document.getElementById('namein'); if (inp) setTimeout(() => { try { inp.focus(); } catch(e) {} }, 50); }
+    if (skKey && !nameKey) mountPhoneMap();
+    if (ansKey && !nameKey) { const inp = document.getElementById('ansin'); if (inp) { inp.value = myAnswerText; setTimeout(() => { try { inp.focus(); } catch(e) {} }, 50); } }
     return;
   }
   renderBoard(); renderMain(); save(); broadcast();
@@ -3801,6 +3825,29 @@ function viewAdmin(){
   }
   return `<div class="adm">${inner}</div>`;
 }
+function viewPhoneName(L){
+  const cur = L.teams[myTeam] || '';
+  const isDefault = /^Lag \d$/.test(cur);
+  return `<div class="phone" style="--c:${col(myTeam)}">
+    <div class="seg">Välkommen ombord</div>
+    <div class="team">Lag ${myTeam+1}</div>
+    <form id="nameform" class="pick" autocomplete="off">
+      <label for="namein" class="msg">Vad heter ert lag?</label>
+      <input id="namein" maxlength="24" autocomplete="off" autocapitalize="words" enterkeyhint="done" value="${isDefault ? '' : esc(cur)}" placeholder="T.ex. Snälltåget" style="font:inherit;font-size:1.4em;padding:.7em .8em;border-radius:14px;border:2px solid var(--c);background:var(--night);color:var(--ink);text-align:center">
+      <button type="submit" class="bigbrake" style="min-height:0;font-size:2em">Klart</button>
+    </form>
+    ${!isDefault || renaming ? `<button class="btn ghost small" data-act="skipname">Behåll ${esc(cur)}</button>` : ''}
+  </div>`;
+}
+document.addEventListener('submit', e => {
+  if (e.target.id !== 'nameform') return;
+  e.preventDefault();
+  const inp = document.getElementById('namein');
+  const nm = inp ? inp.value.replace(/\s+/g,' ').trim().slice(0,24) : '';
+  if (!nm) { if (inp) inp.focus(); return; }
+  pendingName = nm; renaming = false; markNamed(); if (inp) inp.blur();
+  sendHello(); phoneMapKey = null; render();
+});
 function viewPhoneAnswer(L){
   const stop = L.stops[myTeam];
   return `<div class="phone" style="--c:${col(myTeam)}">
@@ -3892,9 +3939,10 @@ function viewPhone(){
         : `<button class="bigbrake ${brakeArmed ? 'armed' : ''}" data-act="pull">${brakeArmed ? 'Säker? Tryck igen' : 'Dra i nödbromsen'}<small>${level} poäng just nu</small></button>`}`;
     }
   }
-  return `<div class="phone" style="--c:${col(t)}"><div class="team">${esc(name)}</div>${inner}</div>`;
+  return `<div class="phone" style="--c:${col(t)}"><div class="team">${esc(pendingName || name)}</div>${inner}${peerUp && L ? '<button class="btn ghost small" data-act="rename" style="align-self:center">Byt lagnamn</button>' : ''}</div>`;
 }
 
+function adminOnline(){ for (const c of conns) if (c.open && c._admin) return true; return false; }
 function countPhones(){
   const counts = [0,0,0,0,0,0];
   for (const c of conns) if (c.open && Number.isInteger(c._team)) counts[c._team]++;
@@ -3944,6 +3992,7 @@ function startHost(){
       if (msg.pin) applyPin(team, msg.pin);
       if (msg.choice) applyChoice(team, msg.choice);
       if (msg.answer) applyAnswer(team, msg.answer);
+      if (typeof msg.name === 'string') { const nm = msg.name.replace(/[\u0000-\u001f]/g,' ').trim().slice(0,24); if (nm) S.teams[team].name = nm; }
       countPhones(); render();
     });
     conn.on('close', () => { conns.delete(conn); countPhones(); render(); });
@@ -3989,7 +4038,7 @@ function sendHello(){
   if (!phoneConn || !phoneConn.open) return;
   try {
     if (mode === 'admin') phoneConn.send({ admin:adminParam });
-    else if (myTeam != null) phoneConn.send({ team:myTeam, pull:pendingPull, pin:pendingPin, answer:pendingAnswer, choice:pendingChoice });
+    else if (myTeam != null) phoneConn.send({ team:myTeam, pull:pendingPull, pin:pendingPin, answer:pendingAnswer, choice:pendingChoice, name:pendingName || undefined });
   } catch(e) {}
 }
 let wake = null;
@@ -4017,6 +4066,9 @@ document.addEventListener('click', e => {
     const j = +b.dataset.j; myChoices[Qn.qid] = j; pendingChoice = { qid:Qn.qid, idx:j };
     sendHello(); render(); return;
   }
+  if (a === 'rename') { renaming = true; phoneMapKey = null; render(); return; }
+  if (a === 'skipname') { renaming = false; markNamed(); phoneMapKey = null; render(); return; }
+  if (a === 'bigqr') { bigQr = !bigQr; render(); window.scrollTo(0,0); return; }
   if (a === 'admqr') { showAdmQr = !showAdmQr; render(); return; }
   if (a === 'editans') { editingAnswer = true; phoneMapKey = null; render(); return; }
   if (a === 'pinlock') {
