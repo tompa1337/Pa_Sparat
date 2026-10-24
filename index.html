@@ -3183,7 +3183,7 @@ const PROGRAM = [
       { q:'Vilken konstnär hade sitt hem i Sundborn, strax utanför staden?', a:'Carl Larsson' },
       { q:'Vad kallades den bevarade gruvarbetaren som hittades 1719?', a:'Fet-Mats' }
     ]},
-  { id:'r2', type:'resa', title:'Resa 2', region:'Europa', answer:'Lissabon',
+  { id:'r2', type:'resa', title:'Resa 2', region:'Europa', answer:'Lissabon', alt:['Lisboa','Lisbon'],
     clues:[
       'På allhelgonadagen 1755 förstördes staden nästan helt av en jordbävning, en tsunami och bränder.',
       'Härifrån seglade Vasco da Gama 1497 iväg på resan som hittade sjövägen till Indien.',
@@ -3204,7 +3204,7 @@ const PROGRAM = [
       { q:'Vilken stad är Australiens huvudstad?', a:'Canberra' },
       { q:'Vilket är Afrikas till ytan största land?', a:'Algeriet' }
     ]},
-  { id:'r3', type:'resa', title:'Resa 3', region:'Världen', answer:'Kyoto',
+  { id:'r3', type:'resa', title:'Resa 3', region:'Världen', answer:'Kyoto', alt:['Kioto'],
     clues:[
       'I över tusen år, fram till 1869, var detta kejsarens residensstad.',
       'Ett internationellt klimatavtal från 1997 har fått sitt namn efter staden.',
@@ -3245,7 +3245,7 @@ function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e) 
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const col = i => `var(--t${i})`;
-function newResa(epoch){ return { shown:0, stops:{}, revealed:false, judged:{}, fShown:{}, fa:{}, epoch:epoch||0 }; }
+function newResa(epoch){ return { shown:0, stops:{}, revealed:false, judged:{}, fShown:{}, fa:{}, answers:{}, epoch:epoch||0 }; }
 function R(id){ return S.resa[id] ||= newResa(0); }
 
 /* Mobilläge: programledarens dator är navet, lagens telefoner kopplar upp sig direkt (PeerJS) */
@@ -3258,6 +3258,7 @@ let hostLive = null;
 let phoneCount = [0,0,0];
 let pendingPull = null;
 let pendingPin = null;
+let pendingAnswer = null, myAnswerText = '', editingAnswer = false, ansSegKey = null;
 let phoneMap = null, phoneMarker = null, phoneMapKey = null, myPin = null;
 let brakeArmed = false, brakeTimer = null;
 const params = new URLSearchParams(location.search);
@@ -3279,6 +3280,13 @@ function skissPts(km, progress){
   return Math.round(10 * d * t);
 }
 function drawProgress(rr){ return rr.startedAt ? Math.min(1, (Date.now() - rr.startedAt) / DRAW_MS) : 0; }
+function norm(t){ return String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,''); }
+function lev(a,b){ const m = a.length, n = b.length; const d = Array.from({length:m+1}, (_,i) => [i]); for (let j=1;j<=n;j++) d[0][j] = j;
+  for (let i=1;i<=m;i++) for (let j=1;j<=n;j++) d[i][j] = Math.min(d[i-1][j]+1, d[i][j-1]+1, d[i-1][j-1] + (a[i-1]===b[j-1]?0:1)); return d[m][n]; }
+function isMatch(text, seg){
+  const g = norm(text); if (!g) return false;
+  return [seg.answer, ...(seg.alt||[])].some(x => { const c = norm(x); return g === c || (c.length > 4 && lev(g,c) <= 2) || (g.length >= 4 && g.includes(c)); });
+}
 function Q(id){ return S.runda[id] ||= { shown:{}, aw:{} }; }
 
 function scores(){
@@ -3397,10 +3405,11 @@ function viewResa(seg){
       let body;
       if (!r.revealed) {
         body = st != null
-          ? `<div class="locked">Stannade på ${st} p</div><div class="muted" style="font-size:.85em">Skriv ner svaret!</div>`
+          ? `<div class="locked">Stannade på ${st} p</div><div class="muted" style="font-size:.85em">${r.answers && r.answers[i] ? '✓ Svar inskickat' : phoneCount[i] ? 'Skriver svaret i mobilen…' : 'Skriv ner svaret!'}</div>`
           : `<button class="brake" data-act="stop" data-t="${i}" ${r.shown ? '' : 'disabled'}>Nödbroms${level ? ' · ' + level + ' p' : ''} <kbd style="border-color:currentColor">${i+1}</kbd></button>`;
       } else {
         body = `<div class="locked">${st != null ? st + ' p' : '–'}</div>
+          ${r.answers && r.answers[i] ? `<div style="font-weight:700">”${esc(r.answers[i])}”</div>` : ''}
           <div class="judge">
             <button class="y ${r.judged[i]===true ? 'sel' : ''}" data-act="judge" data-t="${i}" data-v="1">Rätt</button>
             <button class="n ${r.judged[i]===false ? 'sel' : ''}" data-act="judge" data-t="${i}" data-v="0">Fel</button>
@@ -3561,7 +3570,8 @@ function liveState(){
   const live = { gid:S.gid, teams:S.teams.map(t => t.name.slice(0,24)), scores:scores(), id:seg ? seg.id : null, type:seg ? seg.type : 'home', title:seg ? seg.title : 'Tidtabellen' };
   if (seg && seg.type === 'resa') {
     const r = R(seg.id);
-    Object.assign(live, { epoch:r.epoch||0, shown:r.shown, revealed:r.revealed, stops:r.stops, judged:r.judged, answer:r.revealed ? seg.answer : null });
+    const answered = {}; for (const k in (r.answers||{})) if (r.answers[k]) answered[k] = true;
+    Object.assign(live, { answered, epoch:r.epoch||0, shown:r.shown, revealed:r.revealed, stops:r.stops, judged:r.judged, answer:r.revealed ? seg.answer : null });
   }
   if (seg && seg.type === 'skiss') {
     const st = K(seg.id), rr = KR(seg.id, st.k), item = seg.items[st.k];
@@ -3582,13 +3592,18 @@ function render(){
     renderPhoneBoard();
     const L2 = hostLive;
     const pinPending = pendingPin && L2 && pendingPin.seg === L2.id && pendingPin.k === L2.k && pendingPin.epoch === L2.epoch;
-    const key = mode === 'phone' && peerUp && L2 && L2.type === 'skiss' && L2.active && !(L2.locked && L2.locked[myTeam]) && !pinPending ? `${L2.gid}:${L2.id}:${L2.k}:${L2.epoch}` : null;
-    if (key && key === phoneMapKey && phoneMap) return;
+    const skKey = mode === 'phone' && peerUp && L2 && L2.type === 'skiss' && L2.active && !(L2.locked && L2.locked[myTeam]) && !pinPending ? `${L2.gid}:${L2.id}:${L2.k}:${L2.epoch}` : null;
+    const segKey = L2 && L2.type === 'resa' ? `${L2.gid}:${L2.id}:${L2.epoch}` : null;
+    if (segKey !== ansSegKey) { ansSegKey = segKey; myAnswerText = ''; editingAnswer = false; pendingAnswer = null; }
+    const ansKey = mode === 'phone' && peerUp && L2 && L2.type === 'resa' && !L2.revealed && L2.stops && L2.stops[myTeam] != null && (editingAnswer || !(L2.answered && L2.answered[myTeam])) ? 'ans:' + segKey : null;
+    const key = skKey || ansKey;
+    if (key && key === phoneMapKey && (phoneMap || document.getElementById('ansin'))) return;
     if (phoneMap) { try { phoneMap.remove(); } catch(e) {} phoneMap = null; phoneMarker = null; }
     if (key !== phoneMapKey) myPin = null;
     phoneMapKey = key;
-    document.getElementById('main').innerHTML = mode === 'picker' ? viewPicker() : key ? viewPhoneSkiss(L2) : viewPhone();
-    if (key) mountPhoneMap();
+    document.getElementById('main').innerHTML = mode === 'picker' ? viewPicker() : skKey ? viewPhoneSkiss(L2) : ansKey ? viewPhoneAnswer(L2) : viewPhone();
+    if (skKey) mountPhoneMap();
+    if (ansKey) { const inp = document.getElementById('ansin'); if (inp) { inp.value = myAnswerText; setTimeout(() => { try { inp.focus(); } catch(e) {} }, 50); } }
     return;
   }
   renderBoard(); renderMain(); save(); broadcast();
@@ -3601,6 +3616,32 @@ function renderPhoneBoard(){
     <span class="brand"><span class="dot"></span>Kalas på spåret</span>
     ${t != null ? `<div class="chips"><div class="chip" style="--c:${col(t)}"><span class="nm">${esc(L && L.teams ? L.teams[t] : 'Lag ' + (t+1))}</span><span class="sc">${L && L.scores ? L.scores[t] : 0}</span></div></div>` : ''}`;
 }
+function viewPhoneAnswer(L){
+  const stop = L.stops[myTeam];
+  return `<div class="phone" style="--c:${col(myTeam)}">
+    <div class="team">${esc(L.teams ? L.teams[myTeam] : 'Lag ' + (myTeam+1))}</div>
+    <div class="seg">${esc(L.title)} · Stopp på ${stop} p</div>
+    <form id="ansform" class="pick" autocomplete="off">
+      <label for="ansin" class="msg">Vart är vi på väg?</label>
+      <input id="ansin" maxlength="60" autocomplete="off" autocapitalize="words" enterkeyhint="send" placeholder="Skriv ert svar" style="font:inherit;font-size:1.4em;padding:.7em .8em;border-radius:14px;border:2px solid var(--c);background:var(--night);color:var(--ink);text-align:center">
+      <button type="submit" id="anssend" class="bigbrake" style="min-height:0;font-size:2em">Skicka svaret</button>
+    </form>
+    <div class="status">Svaret visas för alla först när resmålet avslöjas. Ni kan ändra det fram till dess.</div>
+  </div>`;
+}
+document.addEventListener('submit', e => {
+  if (e.target.id !== 'ansform') return;
+  e.preventDefault();
+  const L = hostLive, inp = document.getElementById('ansin');
+  const text = inp ? inp.value.trim() : '';
+  if (!text || !L || L.type !== 'resa' || L.revealed) return;
+  myAnswerText = text; editingAnswer = false;
+  pendingAnswer = { seg:L.id, epoch:L.epoch, gid:L.gid, text, n:Date.now() };
+  const b = document.getElementById('anssend'); if (b) { b.textContent = 'Skickar…'; b.disabled = true; }
+  if (inp) inp.blur();
+  sendHello();
+  setTimeout(() => { if (phoneConn && phoneConn.open) { phoneMapKey = null; render(); } }, 1500);
+});
 function viewPhoneSkiss(L){
   return `<div class="phone" style="--c:${col(myTeam)};gap:.7em">
     <div class="team">${esc(L.teams ? L.teams[myTeam] : 'Lag ' + (myTeam+1))}</div>
@@ -3647,9 +3688,13 @@ function viewPhone(){
       const j = L.judged ? L.judged[t] : undefined;
       inner = `<div class="seg">${esc(L.title)} · Svaret</div><div class="big" style="color:var(--lamp)">${esc(L.answer || '')}</div>
         <div class="msg">Ni stannade på ${stop != null ? stop + ' poäng' : '–'}</div>
+        ${myAnswerText ? `<div class="status">Ert svar: ${esc(myAnswerText)}</div>` : ''}
         ${j === true ? `<div class="result y">Rätt! +${stop} p</div>` : j === false ? `<div class="result n">Tyvärr fel</div>` : `<div class="status">Programledaren rättar…</div>`}`;
     } else if (stop != null) {
-      inner = `<div class="seg">${esc(L.title)}</div><div class="big">Stopp på ${stop} p</div><div class="msg">Skriv ner ert svar nu!</div>`;
+      inner = `<div class="seg">${esc(L.title)}</div><div class="big">Stopp på ${stop} p</div>
+        <div class="msg">${myAnswerText ? `Ert svar: <strong>${esc(myAnswerText)}</strong>` : 'Svaret är inskickat.'}</div>
+        <button class="btn" data-act="editans">Ändra svar</button>
+        <div class="status">Svaret visas när programledaren avslöjar resmålet.</div>`;
     } else if (!L.shown) {
       inner = `<div class="seg">${esc(L.title)}</div><div class="big">Snart avgång</div><div class="status">Nödbromsen låses upp när första ledtråden visas.</div>`;
     } else {
@@ -3672,6 +3717,14 @@ function applyPull(team, pull){
   if (!seg || seg.type !== 'resa' || !pull || pull.seg !== seg.id || pull.gid !== S.gid) return;
   const r = R(seg.id), at = Number(pull.at);
   if (pull.epoch === (r.epoch||0) && !r.revealed && r.stops[team] == null && at >= 1 && at <= r.shown) r.stops[team] = POINTS[at-1];
+}
+function applyAnswer(team, ans){
+  const seg = S.view != null ? PROGRAM[S.view] : null;
+  if (!seg || seg.type !== 'resa' || !ans || ans.seg !== seg.id || ans.gid !== S.gid) return;
+  const r = R(seg.id); r.answers ||= {};
+  if (ans.epoch !== (r.epoch||0) || r.revealed || r.stops[team] == null) return;
+  const text = String(ans.text || '').replace(/[\u0000-\u001f]/g,' ').trim().slice(0,60);
+  if (text) r.answers[team] = text;
 }
 function applyPin(team, pin){
   const seg = S.view != null ? PROGRAM[S.view] : null;
@@ -3697,6 +3750,7 @@ function startHost(){
       conn._team = team;
       if (msg.pull) applyPull(team, msg.pull);
       if (msg.pin) applyPin(team, msg.pin);
+      if (msg.answer) applyAnswer(team, msg.answer);
       countPhones(); render();
     });
     conn.on('close', () => { conns.delete(conn); countPhones(); render(); });
@@ -3738,7 +3792,7 @@ function connectToHost(){
   c.on('close', () => { if (phoneConn === c) { phoneConn = null; peerUp = false; render(); setTimeout(connectToHost, 2000); } });
   c.on('error', () => {});
 }
-function sendHello(){ if (myTeam != null && phoneConn && phoneConn.open) { try { phoneConn.send({ team:myTeam, pull:pendingPull, pin:pendingPin }); } catch(e) {} } }
+function sendHello(){ if (myTeam != null && phoneConn && phoneConn.open) { try { phoneConn.send({ team:myTeam, pull:pendingPull, pin:pendingPin, answer:pendingAnswer }); } catch(e) {} } }
 let wake = null;
 async function keepAwake(){ try { if (!wake && navigator.wakeLock) { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => { wake = null; }); } } catch(e) {} }
 document.addEventListener('visibilitychange', () => {
@@ -3759,6 +3813,7 @@ document.addEventListener('click', e => {
   const a = b.dataset.act, t = +b.dataset.t, seg = S.view != null ? PROGRAM[S.view] : null;
   if (mode !== 'host') keepAwake();
   if (a === 'pickteam') { mode = 'phone'; myTeam = t; try { history.replaceState(null, '', baseUrl() + '?spel=' + joinCode + '&lag=' + (t+1)); } catch(e) {} sendHello(); render(); return; }
+  if (a === 'editans') { editingAnswer = true; phoneMapKey = null; render(); return; }
   if (a === 'pinlock') {
     const L = hostLive;
     if (!myPin || !L || L.type !== 'skiss' || !L.active) return;
@@ -3784,7 +3839,7 @@ document.addEventListener('click', e => {
     const r = R(seg.id);
     if (a === 'next' && r.shown < 5) r.shown++;
     if (a === 'stop' && r.shown && r.stops[t] == null) r.stops[t] = POINTS[r.shown-1];
-    if (a === 'reveal') { S.teams.forEach((_,i) => { if (r.stops[i] == null && r.shown === 5) r.stops[i] = 2; }); r.revealed = true; r.shown = 5; }
+    if (a === 'reveal') { S.teams.forEach((_,i) => { if (r.stops[i] == null && r.shown === 5) r.stops[i] = 2; }); r.revealed = true; r.shown = 5; r.answers ||= {}; S.teams.forEach((_,i) => { const t = r.answers[i]; if (t && r.judged[i] === undefined && isMatch(t, seg)) r.judged[i] = true; }); }
     if (a === 'judge') { const v = b.dataset.v === '1'; r.judged[t] = r.judged[t] === v ? undefined : v; }
     if (a === 'fshow') r.fShown[b.dataset.k] = !r.fShown[b.dataset.k];
     if (a === 'faward') { const k = b.dataset.k; r.fa[k] ||= {}; r.fa[k][t] = !r.fa[k][t]; }
