@@ -1,0 +1,9 @@
+{
+  "name": "kalas-pa-sparet",
+  "version": "1.0.0",
+  "description": "Frågesport i På spåret-stil med nödbroms i mobilen",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" },
+  "license": "MIT"
+}
