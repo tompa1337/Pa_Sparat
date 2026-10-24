@@ -16,4 +16,4 @@ Koppla repot till ett nytt Railway-projekt. Railway känner igen Node-projektet 
 
 ## Ändra frågor
 
-Resor och frågor ligger i `PROGRAM` högst upp i skriptet i `index.html`.
+Resor och frågor ligger i `PROGRAM` högst upp i skriptet i `index.html`. Skisserna i mellanrundan Skissen ligger i `SKISSER` och kommer från PartyParty.
