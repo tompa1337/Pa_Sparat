@@ -3382,6 +3382,7 @@ function viewHome(){
       </div>
       <div class="panel">
         <h3>Lagens telefoner</h3>
+        <div class="nteams" role="group" aria-label="Antal lag, QR-koder"><span class="muted">En QR-kod per lag</span>${[2,3,4,5,6].map(n => `<button class="${S.teams.length === n ? 'sel' : ''}" data-act="nteams" data-n="${n}" aria-pressed="${S.teams.length === n}">${n}</button>`).join('')}</div>
         ${location.protocol === 'file:' ? `<p style="margin:0;font-size:.92em">Sidan är öppnad som en fil på datorn. Lägg upp den på nätet först, så fungerar QR-koderna.</p>` : `
         <p style="margin:0;font-size:.92em">Varje lag skannar sin QR-kod med mobilkameran. Ingen app eller inloggning behövs.</p>
         <div class="qrs">${S.teams.map((t,i) => `<div class="qr" style="--c:${col(i)}"><div class="qrbox">${qrSvg(joinUrl(i))}</div><div class="nm">${esc(t.name)}</div><div class="${phoneCount[i] ? 'on-dot' : 'off-dot'}">${phoneCount[i] ? '● Ansluten' : '○ Väntar'}</div></div>`).join('')}</div>
