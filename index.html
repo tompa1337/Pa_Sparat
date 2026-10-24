@@ -172,6 +172,12 @@ code.tok{font-family:var(--body);font-weight:700;color:var(--lamp);background:va
 .jtile{display:flex;flex-direction:column;align-items:center;gap:.4em;text-align:center}
 .jtile .qrbox{max-width:min(200px,26vh);border-width:5px}
 .jtile .jn{font-family:var(--display);font-weight:900;font-size:1.6em;text-transform:uppercase;color:var(--c);line-height:1}
+.standings{display:flex;flex-direction:column;gap:.4em}
+.stand{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:.7em;background:var(--night);border-radius:10px;padding:.45em .6em .45em .8em}
+.stand .sw{width:.8em;height:.8em;border-radius:50%;background:var(--c)}
+.stand .snm{font-weight:700;display:flex;flex-direction:column;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.stand .tphone{font-weight:400}
+.stand .ssc{font-family:var(--display);font-weight:900;font-size:1.7em;color:var(--c);font-variant-numeric:tabular-nums;line-height:1}
 .qrs{display:grid;grid-template-columns:repeat(auto-fill,minmax(105px,1fr));gap:.6em}
 .qr{display:flex;flex-direction:column;align-items:center;gap:.3em;font-size:.82em;text-align:center;min-width:0}
 .qrbox{background:#fff;border-radius:8px;padding:4px;width:100%;max-width:170px;border:3px solid var(--c)}
@@ -3431,16 +3437,8 @@ function isDone(seg){
 }
 
 function renderBoard(){
-  const sc = scores();
   document.getElementById('board').innerHTML = `
-    <button class="brand" data-act="home" aria-label="Till startsidan"><span class="dot"></span>Kalas på spåret</button>
-    <div class="chips">${S.teams.map((t,i) => `
-      <div class="chip" style="--c:${col(i)}">
-        <span class="nm" data-name="${i}">${esc(t.name)}</span>
-        <span class="sc">${sc[i]}</span>
-        <span class="adj"><button data-act="adj" data-t="${i}" data-d="1" aria-label="Ge ${esc(t.name)} en poäng">▲</button><button data-act="adj" data-t="${i}" data-d="-1" aria-label="Ta en poäng från ${esc(t.name)}">▼</button></span>
-      </div>`).join('')}
-    </div>`;
+    <button class="brand" data-act="home" aria-label="Till startsidan"><span class="dot"></span>Kalas på spåret</button>`;
 }
 
 function viewHome(){
@@ -3460,9 +3458,16 @@ function viewHome(){
     </section>
     <aside style="display:flex;flex-direction:column;gap:1em">
       <div class="panel">
-        <h3>Lagen</h3>
+        <h3>Ställning</h3>
         <div class="nteams" role="group" aria-label="Antal lag"><span class="muted">Antal lag</span>${[2,3,4,5,6].map(n => `<button class="${S.teams.length === n ? 'sel' : ''}" data-act="nteams" data-n="${n}" aria-pressed="${S.teams.length === n}">${n}</button>`).join('')}</div>
-        ${S.teams.map((t,i) => `<label class="field" style="--c:${col(i)}"><span></span><input id="team-name-${i}" data-name-input="${i}" value="${esc(t.name)}" maxlength="24" aria-label="Namn på lag ${i+1}"></label>`).join('')}
+        <div class="standings">${(() => { const sc = scores(); return S.teams.map((t,i) => `
+          <div class="stand" style="--c:${col(i)}">
+            <span class="sw"></span>
+            <span class="snm">${esc(t.name)}<span class="tphone ${phoneCount[i] ? 'live' : ''}">${phoneCount[i] ? 'telefon ansluten' : 'ingen telefon'}</span></span>
+            <span class="ssc">${sc[i]}</span>
+            <span class="adj"><button data-act="adj" data-t="${i}" data-d="1" aria-label="Ge ${esc(t.name)} en poäng">▲</button><button data-act="adj" data-t="${i}" data-d="-1" aria-label="Ta en poäng från ${esc(t.name)}">▼</button></span>
+          </div>`).join(''); })()}</div>
+        <p class="hint" style="margin:0">Lagen väljer sina namn i mobilen. Pilarna justerar poängen för hand.</p>
       </div>
       <div class="panel">
         <h3>Så spelar ni</h3>
